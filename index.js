@@ -2,6 +2,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Client, Collection, GatewayIntentBits, ActivityType } = require('discord.js');
 const { Player } = require('discord-player')
+const express = require('express')
+const app = express()
+const port = process.env.PORT ?? 9000
+
+const server = app.listen(port, () => {
+	console.log(`api server: ${port}`)
+})
+
+app.get('/api/signal', async (req, res) => {
+	res.status(200).send()
+})
 
 // Create a new client instance
 const client = new Client({
@@ -18,7 +29,8 @@ const player = new Player(client, {
 	skipFFmpeg: true,
 	ytdlOptions: {
 		quality: 'highestaudio',
-		highWaterMark: 1 << 25,
+		highWaterMark: 1 << 30,
+		dlChunkSize: 0
 	}
 })
 

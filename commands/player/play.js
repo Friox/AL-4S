@@ -59,6 +59,7 @@ async function execute(interaction) {
         const embed = MakeSearchResultEmbed(searchResult)
         interaction.editReply({embeds: [embed]});
     } catch (e) {
+        console.log(e)
         const embed = MakeSimpleEmbed({
             title: MESSAGE.PLAY_ER_2_TITLE,
             desc: MESSAGE.PLAY_ER_2_DESC,
