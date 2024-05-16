@@ -1,5 +1,5 @@
 const SETTING = {
-    EMBED_TIMEOUT: 3000,
+    EMBED_TIMEOUT: 5000,
     EMBED_COLOR: 'Blue',
     PLAYER_FAKE_ENABLE: false,
     PLAYER_FAKE_PERCENTAGE: 0.3,
@@ -7,7 +7,8 @@ const SETTING = {
 }
 
 const ETYPE = {
-    MUSIC_PLAYER: 'mp'
+    MUSIC_PLAYER: 'mp',
+    VALORANT_HELPER: 'vh'
 }
 
 Object.freeze(SETTING)

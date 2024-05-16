@@ -4,10 +4,10 @@ const { Client, Collection, GatewayIntentBits, ActivityType } = require('discord
 const { Player } = require('discord-player')
 const express = require('express')
 const app = express()
-const port = process.env.PORT ?? 9000
+const port = process.env.API_PORT ?? 9000
 
 const server = app.listen(port, () => {
-	console.log(`api server: ${port}`)
+	console.log(`API Server Listening on ${port}`)
 })
 
 app.get('/api/signal', async (req, res) => {

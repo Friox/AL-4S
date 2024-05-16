@@ -54,7 +54,8 @@ const MESSAGE = {
 }
 
 const FOOTER_STR = new Map([
-    ['mp', 'AL-4S Music Player']
+    ['mp', 'AL-4S Music Player'],
+    ['vh', 'AL-4S Valorant Helper']
 ])
 
 module.exports = { MESSAGE, FOOTER_STR }
