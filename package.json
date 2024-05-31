@@ -22,6 +22,8 @@
     "discord-player": "^6.6.8",
     "discord.js": "^14.14.1",
     "express": "^4.19.2",
-    "mysql2": "^3.9.7"
+    "mysql2": "^3.9.7",
+    "node-cron": "^3.0.3",
+    "redis": "^4.6.14"
   }
 }

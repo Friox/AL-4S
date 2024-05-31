@@ -2,6 +2,7 @@ const { SlashCommandBuilder, CommandInteraction } = require('discord.js');
 const { MakeSimpleEmbed } = require('../../utils/EmbedHelper')
 const { ETYPE } = require('../../utils/Fabric')
 const { checkConnection } = require('../../utils/DBHelper')
+const { createClient } = require('redis')
 const axios = require('axios')
 
 const data = new SlashCommandBuilder()
@@ -20,6 +21,7 @@ async function execute(interaction) {
     let hbStatus = 2
     let vasStatus = 2
     let dbStatus = 2
+    let redisStatus = 2
 
     try {
         const hbPort = process.env.API_PORT ?? 9000
@@ -50,11 +52,22 @@ async function execute(interaction) {
     } catch(e) {
         dbStatus = 0
     }
+
+    try {
+        await createClient({
+            url: `${process.env.REDIS_URL}:${process.env.REDIS_PORT}`,
+            
+        }).connect()
+        redisStatus = 1
+    } catch(e) {
+        redisStatus = 0
+    }
     
     let statusStr = ''
     statusStr += `HeartBeat: ${statusSymbol[hbStatus]}\n`
     statusStr += `Valorant Auth Server: ${statusSymbol[vasStatus]}\n`
-    statusStr += `Database Connection: ${statusSymbol[dbStatus]}`
+    statusStr += `Database Connection: ${statusSymbol[dbStatus]}\n`
+    statusStr += `Redis Cache Status: ${statusSymbol[redisStatus]}`
     const embed = MakeSimpleEmbed({
         title: '봇 상태',
         desc: statusStr,

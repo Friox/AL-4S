@@ -3,6 +3,8 @@ const path = require('node:path');
 const { Client, Collection, GatewayIntentBits, ActivityType } = require('discord.js');
 const { Player } = require('discord-player')
 const express = require('express')
+const cron = require('node-cron')
+const { updateValorantInfo } = require('./utils/ValorantHelper')
 const app = express()
 const port = process.env.API_PORT ?? 9000
 
@@ -116,6 +118,15 @@ async function main() {
 		return null
 	})
 	*/
+
+	cron.schedule('30 0 9 * * *', async () => {
+		const updateRes = await updateValorantInfo()
+		if (updateRes) {
+			console.log('val update success')
+		} else {
+			console.log('val update fail')
+		}
+	})
 }
 
 main()

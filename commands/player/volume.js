@@ -10,7 +10,7 @@ data.setDescription('플레이어의 볼륨을 조절합니다, 값을 입력하
 data.addNumberOption(option => 
     option
     .setName('value')
-    .setDescription('설정할 볼륨값 (0 ~ 100, 기본값: 20)')
+    .setDescription('설정할 볼륨값 (0 ~ 100, 기본값: 2)')
     .setRequired(false)
     .setMinValue(0)
     .setMaxValue(100)

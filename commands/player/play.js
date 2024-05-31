@@ -49,7 +49,7 @@ async function execute(interaction) {
                 metadata: interaction,
                 disableBiquad: true,
                 disableEqualizer: true,
-                volume: 20,
+                volume: 2,
                 bufferingTimeout: 10000,
                 skipOnNoStream: true,
                 disableHistory: true,

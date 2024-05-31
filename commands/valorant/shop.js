@@ -1,10 +1,10 @@
 const { SlashCommandBuilder, CommandInteraction, EmbedBuilder, Embed } = require('discord.js');
 const axios = require('axios')
-const { ValorantApiCom } = require('@valapi/valorant-api.com')
 const { decryptStr } = require('../../utils/CipherHelper')
 const { getValorantUser } = require('../../utils/DBHelper')
 const { MakeSimpleEmbed } = require('../../utils/EmbedHelper')
 const { ETYPE, SETTING } = require('../../utils/Fabric')
+const { createClient } = require('redis')
 
 const data = new SlashCommandBuilder()
 data.setName('shop')
@@ -21,6 +21,22 @@ data.addStringOption(option =>
     .setDescription('비밀번호')
     .setRequired(false)
 )
+
+function convertTime(str, detail = false) {
+    const v = parseInt(str)
+    if (isNaN(v) || v < 0) return '0 초'
+    const h = Math.floor(v / 3600)
+    const m = Math.floor((v % 3600) / 60)
+    const s = (v % 3600) % 60
+    if (h == 0 && m == 0) return `${s} 초`
+    else if (h == 0) {
+        if (detail) return `${m} 분 ${s} 초`
+        else return `${m} 분`
+    } else {
+        if (detail) return `${h} 시간 ${m} 분 ${s} 초`
+        else return `${h} 시간 ${m} 분`
+    }
+}
 
 /**
  * 
@@ -48,9 +64,11 @@ const ERRORS = {
     USER_FAIL: 'user_fail',
     SHOP_ERROR: 'shop_error',
     XP_ERROR: 'xp_error',
+    REDIS_ERROR: 'redis_error',
+    LOGIN_TIMEOUT: 'login_timeout'
 }
 
-function errorHandler(type) {
+function errorHandler(type, arg) {
     const data = {
         title: '',
         desc: ''
@@ -86,6 +104,11 @@ function errorHandler(type) {
             data.desc = '유효한 사용자 정보를 찾을 수 없습니다.\n아이디와 비밀번호를 확인해주세요.'
             break
 
+        case ERRORS.LOGIN_TIMEOUT:
+            data.title = '❌  로그인 실패'
+            data.desc = `로그인 요청한도에 도달했습니다. **${convertTime(arg, true)}** 뒤에 다시 시도해주세요.`
+            break
+
         case ERRORS.USER_FAIL:
             data.title = '❌  사용자 정보 로드 실패'
             data.desc = '사용자 정보를 불러올 수 없습니다.'
@@ -99,83 +122,62 @@ function errorHandler(type) {
             data.title = '❌  레벨 정보 로드 실패'
             data.desc = '레벨 정보를 가져오는 중 오류가 발생했습니다.'
             break
+
+        case ERRORS.REDIS_ERROR:
+            data.title = '💿  발로란트 데이터베이스 오류'
+            data.desc = '발로란트 데이터베이스가 비어있습니다.\n`/valinfoupdate` 명령어롤 사용해주세요.'
+            break
     }
     throw new CustomError(data)
 }
 
-function convertTime(str) {
-    const v = parseInt(str)
-    if (isNaN(v) || v < 0) return '0 분'
-    const h = Math.floor(v / 3600)
-    if (h == 0) return `${Math.floor(v / 60)} 분`
-    else return `${h} 시간`
-}
+const tierIconMap = new Map([
+    ['Deluxe', '<:DeluxeTier:1240253329288855593>'],
+    ['Exclusive', '<:ExclusiveTier:1240253327057621063>'],
+    ['Premium', '<:PremiumTier:1240253325350408254>'],
+    ['Select', '<:SelectTier:1240253323077226508>'],
+    ['Ultra', '<:UltraTier:1240253321760215080>']
+])
 
 /**
  * Command Execute
  * @param {CommandInteraction} interaction
  */
 async function execute(interaction) {
-    await interaction.deferReply({ephemeral: true})
     const uuid = interaction.member.id
     let id = interaction.options.getString('id', false)
     let pw = interaction.options.getString('pw', false)
+    const isPrivate = !id && !pw
     try {
-        if (!id && !pw) {
+        // Check Private
+        if (isPrivate) {
+            await interaction.deferReply()
             const queryResult = await getValorantUser(uuid)
             if (queryResult.length == 1) {
                 id = decryptStr(queryResult[0].id)
                 pw = decryptStr(queryResult[0].pw)
                 if (id == '' && pw == '') errorHandler(ERRORS.ENCRYPT_ERROR)
             } else errorHandler(ERRORS.REQUIRE_LOGIN)
-        } else if (!id || !pw) errorHandler(ERRORS.AUTH_BLANK)
-    
-        const valorantApiCom = new ValorantApiCom({ language: "ko-KR" });
-        // Build Version
-        const buildVersionRes = await valorantApiCom.Version.get()
-        const buildVersion = buildVersionRes.data?.data?.buildVersion
+        } else if (!id || !pw) {
+            await interaction.deferReply({ephemeral: true})
+            errorHandler(ERRORS.AUTH_BLANK)
+        }
+        else await interaction.deferReply({ephemeral: true})
 
-        // Currencies
-        // const currenciesRes = await valorantApiCom.Currencies.get()
-        // const currencyUUID = currenciesRes.data?.data[0].uuid
-        const currencyUUID = '85ad13f7-3d1b-5128-9eb2-7cd8ee0b5741'
-        
-        // Tier
-        const tierIconMap = new Map()
-        tierIconMap.set('Deluxe', '<:DeluxeTier:1240253329288855593>')
-        tierIconMap.set('Exclusive', '<:ExclusiveTier:1240253327057621063>')
-        tierIconMap.set('Premium', '<:PremiumTier:1240253325350408254>')
-        tierIconMap.set('Select', '<:SelectTier:1240253323077226508>')
-        tierIconMap.set('Ultra', '<:UltraTier:1240253321760215080>')
+        // Init Redis Client
+        const client = await createClient({
+            url: `${process.env.REDIS_URL}:${process.env.REDIS_PORT}`
+        }).on('error', err => console.log('Redis Client Error', err)).connect()
+        const isAlive = await client.get('data_time')
+        if (!isAlive) errorHandler(ERRORS.REDIS_ERROR)
 
-        const tierMap = new Map()
-        const tierRes = await valorantApiCom.ContentTiers.get()
-        const tier = tierRes.data?.data
-        if (tier) {
-            for (let i = 0; i < tier.length; i++) {
-                tierMap.set(tier[i].uuid, {
-                    displayName: tier[i].displayName,
-                    devName: tier[i].devName,
-                    highlightColor: tier[i].highlightColor,
-                    displayIcon: tier[i].displayIcon
-                })
-            }
-        } else errorHandler(ERRORS.TIER_ERROR)
-
-        // Weapon Skin Info
-        const skinMap = new Map()
-        const weaponSkinInfoRes = await valorantApiCom.Weapons.getSkins()
-        const weaponSkinInfo = weaponSkinInfoRes.data?.data
-        if (weaponSkinInfo) {
-            for (let i = 0; i < weaponSkinInfo.length; i++) {
-                if (!weaponSkinInfo[i].contentTierUuid) continue
-                if (weaponSkinInfo[i].levels.length) {
-                    skinMap.set(weaponSkinInfo[i].levels[0].uuid, weaponSkinInfo[i].contentTierUuid)
-                }
-            }
-        } else errorHandler(ERRORS.SKIN_ERROR)
+        // Get Valorant Info
+        const valInfo = await client.hGetAll('val_info')
+        const buildVersion = valInfo.build_version
+        const currencyUUID = valInfo.currencies_uuid
 
         // Login
+        
         const formData = new FormData()
         formData.append('id', id)
         formData.append('pw', pw)
@@ -184,12 +186,21 @@ async function execute(interaction) {
             url: `${process.env.VAL_AUTH_SERVER_URL}:${process.env.VAL_AUTH_SERVER_PORT}/auth`,
             data: formData
         })
+        if (!loginRes.data) errorHandler(ERRORS.AUTH_FAIL)
+        if (!loginRes.data.success) {
+            if (loginRes.data.code == 429) errorHandler(ERRORS.LOGIN_TIMEOUT, loginRes.data.timeout)
+            else errorHandler(ERRORS.AUTH_FAIL)
+        }
         const acctoken = loginRes.data?.actoken
         const enttoken = loginRes.data?.enttoken
         const puuid = loginRes.data?.puuid
-        if (!acctoken || !enttoken || !puuid) errorHandler(ERRORS.AUTH_FAIL)
+        if (!acctoken || !enttoken || !puuid) {
+            errorHandler(ERRORS.AUTH_FAIL)
+        } else {
 
-        // User Info
+        }
+
+        // Get User Info
         const userInfoRes = await axios({
             method: 'get',
             url: 'https://auth.riotgames.com/userinfo',
@@ -202,7 +213,7 @@ async function execute(interaction) {
         const gameName = acctInfo?.game_name
         const tagLine = acctInfo?.tag_line
 
-        // XP Info
+        // Get XP Info
         const userDataRes = await axios({
             method: 'get',
             url: `https://pd.kr.a.pvp.net/account-xp/v1/players/${puuid}`,
@@ -214,10 +225,10 @@ async function execute(interaction) {
             }
         })
         const xpinfo = userDataRes.data?.Progress
-        const level = xpinfo.Level
+        const level = xpinfo?.Level
         const xp = xpinfo.XP
 
-        // Shop Info
+        // Get Shop Info
         const shopInfoRes = await axios({
             method: 'get',
             url: `https://pd.kr.a.pvp.net/store/v2/storefront/${puuid}`,
@@ -232,30 +243,36 @@ async function execute(interaction) {
         if (!skinsPanelLayout) errorHandler(ERRORS.SHOP_ERROR)
         const remainTime = skinsPanelLayout.SingleItemOffersRemainingDurationInSeconds
         const shopInfo = skinsPanelLayout.SingleItemStoreOffers
-        
         const skinRes = []
         const resEmbed = []
         const timeEmbed = new EmbedBuilder()
         timeEmbed.setColor('#BD3944')
-        timeEmbed.setDescription(`\`${gameName}#${tagLine} (LV. ${level})\` 의 상점 | ${convertTime(remainTime)} 남음`)
+        timeEmbed.setTitle(`${gameName}#${tagLine}(LV. ${level}) 의 일일상점`)
+        timeEmbed.setDescription(`${convertTime(remainTime)} 남음`)
         resEmbed.push(timeEmbed)
         for (let i = 0; i < shopInfo.length; i++) {
             let value = ""
-            const tmp = (await valorantApiCom.Weapons.getSkinLevelByUuid(shopInfo[i].Rewards[0].ItemID)).data?.data
+            const tmp = await client.hGetAll(shopInfo[i].Rewards[0].ItemID)
+            if (!tmp) continue
             const res = new EmbedBuilder()
-            const tier = tierMap.get(skinMap.get(tmp.uuid))
-            const ecolor = tier.highlightColor.toUpperCase().substr(0, 6)
-            res.setColor(`#${ecolor}`)
-            const tierIcon = tierIconMap.get(tier.devName)
-            value += `${tierIcon ? tierIcon : 'Unknown'} **${tmp.displayName}**\n`
+            const tierUUID = tmp.tier_uuid
+            const tier = await client.hGet(tierUUID, 'dev_name')
+            const tierIcon = tierIconMap.get(tier)
+            const ecolor = (await client.hGet(tierUUID, 'highlight_color'))?.toUpperCase().substr(0, 6)
+            if (ecolor) res.setColor(`#${ecolor}`)
+            value += `${tierIcon ? tierIcon : 'Unknown'} **${tmp.display_name}**\n`
             value += `<:ValorantPointIcon:1240253319461605447> ${shopInfo[i].Cost[currencyUUID]}`
             res.setDescription(value)
-            res.setThumbnail(tmp.displayIcon)
+            res.setThumbnail(tmp.display_icon)
             skinRes.push(tmp)
             resEmbed.push(res)
         }
-        await interaction.deleteReply()
-        interaction.channel.send({embeds: resEmbed, options: { ephemeral: true }})
+        if (isPrivate) {
+            interaction.editReply({embeds: resEmbed})
+        } else {
+            await interaction.deleteReply()
+            interaction.channel.send({embeds: resEmbed})
+        }
     } catch(e) {
         console.log(e)
         if (axios.isAxiosError(e)) {
@@ -266,7 +283,7 @@ async function execute(interaction) {
                 type: ETYPE.VALORANT_HELPER
             })
             await interaction.editReply({embeds: [embed]})
-            setTimeout(() => interaction.deleteReply(), SETTING.EMBED_TIMEOUT);
+            // setTimeout(() => interaction.deleteReply(), SETTING.EMBED_TIMEOUT);
         } else if (!e.title || !e.desc) {
             const embed = MakeSimpleEmbed({
                 title: '❌  오류',
@@ -275,7 +292,7 @@ async function execute(interaction) {
                 type: ETYPE.VALORANT_HELPER
             })
             await interaction.editReply({embeds: [embed]})
-            setTimeout(() => interaction.deleteReply(), SETTING.EMBED_TIMEOUT);
+            // setTimeout(() => interaction.deleteReply(), SETTING.EMBED_TIMEOUT);
         } else {
             const embed = MakeSimpleEmbed({
                 title: e.title,
@@ -284,7 +301,7 @@ async function execute(interaction) {
                 type: ETYPE.VALORANT_HELPER
             })
             await interaction.editReply({embeds: [embed]})
-            setTimeout(() => interaction.deleteReply(), SETTING.EMBED_TIMEOUT);
+            // setTimeout(() => interaction.deleteReply(), SETTING.EMBED_TIMEOUT);
         }
     }
 }
