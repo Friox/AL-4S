@@ -99,7 +99,7 @@ async function execute(interaction) {
     try {
         const loginRes = await axios({
             method: 'post',
-            url: `${process.env.VAL_AUTH_SERVER_URL}:${process.env.VAL_AUTH_SERVER_PORT}/auth`,
+            url: 'http://valauth:8080/auth',
             data: formData
         })
         const acctoken = loginRes.data?.actoken
