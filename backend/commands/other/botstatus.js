@@ -55,7 +55,7 @@ async function execute(interaction) {
 
     try {
         await createClient({
-            url: `${process.env.REDIS_URL}:${process.env.REDIS_PORT}`,
+            url: 'redis://redis:6379',
             
         }).connect()
         redisStatus = 1

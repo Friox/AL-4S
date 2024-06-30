@@ -1,0 +1,49 @@
+services:
+  redis:
+    container_name: AL-4S-redis
+    image: redis:latest
+    expose:
+      - "6379"
+    volumes:
+      - redis:/data
+
+  mysql:
+    container_name: AL-4S-mysql
+    image: mysql:lts
+    expose:
+      - "3306"
+    environment:
+      MYSQL_DATABASE: AL-4S
+      MYSQL_USER: arisu
+      MYSQL_PASSWORD: arisu
+      MYSQL_ROOT_PASSWORD: arisu
+      TZ: Asia/Seoul
+    volumes:
+      - data:/var/lib/mysql
+      - /etc/localtime:/etc/localtime:ro
+      - ./db:/docker-entrypoint-initdb.d
+
+  valauth:
+    container_name: AL-4S-valauth
+    build: ./auth
+    image: al-4s-valauth
+    expose:
+      - "8080"
+
+  backend:
+    container_name: AL-4S-backend
+    build: ./backend
+    image: al-4s-backend
+    ports:
+      - "9000:9000"
+    depends_on:
+      - redis
+      - mysql
+      - valauth
+    env_file:
+      - ./backend/.env
+
+volumes:
+  data:
+  redis:
+   

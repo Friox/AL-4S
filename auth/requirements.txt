@@ -1,0 +1,5 @@
+fastapi==0.110.1
+vbas==2.1
+uvicorn==0.29.0
+aiohttp==3.9.4
+python-multipart==0.0.9

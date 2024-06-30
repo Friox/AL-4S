@@ -166,7 +166,7 @@ async function execute(interaction) {
 
         // Init Redis Client
         const client = await createClient({
-            url: `${process.env.REDIS_URL}:${process.env.REDIS_PORT}`
+            url: 'redis://redis:6379'
         }).on('error', err => console.log('Redis Client Error', err)).connect()
         const isAlive = await client.get('data_time')
         if (!isAlive) errorHandler(ERRORS.REDIS_ERROR)
@@ -183,7 +183,8 @@ async function execute(interaction) {
         formData.append('pw', pw)
         const loginRes = await axios({
             method: 'post',
-            url: `${process.env.VAL_AUTH_SERVER_URL}:${process.env.VAL_AUTH_SERVER_PORT}/auth`,
+            // url: `${process.env.VAL_AUTH_SERVER_URL}:${process.env.VAL_AUTH_SERVER_PORT}/auth`,
+            url: 'http://valauth:8080/auth',
             data: formData
         })
         if (!loginRes.data) errorHandler(ERRORS.AUTH_FAIL)
